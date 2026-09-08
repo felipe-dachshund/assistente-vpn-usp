@@ -59,7 +59,7 @@ A solução ideal varia conforme a versão da sua distribuição Linux, devido �
 
 ### Usando OpenFortiGUI
 
-O OpenFortiGUI é uma interface gráfica em Qt e já vem com OpenFortiVPN. É uma alternativa razoável no Debian 12, onde o NetworkManager-OpenConnect pode não funcionar para o protocolo Forticlient, mas também funciona no Debian 13 e no (K)Ubuntu.
+O OpenFortiGUI é uma interface gráfica em Qt e já vem com OpenFortiVPN. É uma alternativa razoável no Debian 12, onde o NetworkManager-OpenConnect pode não funcionar para o protocolo Fortinet, mas também funciona no Debian 13 e no (K)Ubuntu.
 
 1.  Siga as instruções em https://apt.iteas.at/ para adicionar o repositório APT.
     Obs.: Pode ser necessário entrar numa sessão de _root_ para conseguir executar os comandos sem erro. Faça isso com o comando `su` ou com `sudo su` e, ao terminar, execute `exit` para sair da sessão de _root_ e voltar à anterior.
@@ -73,7 +73,7 @@ O OpenFortiGUI é uma interface gráfica em Qt e já vem com OpenFortiVPN. É um
 3.  Abra o OpenFortiGUI. Ele deve iniciar o assistente de configuração (_setup wizard_)
     - Clique em _Next_.
     - Recomenda-se selecionar a caixa _Password Manager_ para que a chave criptográfica do openFortiGUI seja armazenada no chaveiro do sistema, mais bem protegida.
-    - Recomenda-se também clicar no botão _Autogenerate keys_. Aquelas chaves _default_ do openFortiGUI, começando com yowp2… e VoUT5… são fixas e, portanto, não seguras. Além disso, essas chaves são para uso interno do programa; você não precisará decorá-las, elas podem ser aleatórias.
+    - Recomenda-se também clicar no botão _Autogenerate keys_. Aquelas chaves _default_ do openFortiGUI, começando com yowp2… e VoUT5… são fixas e, portanto, não seguras. Além disso, essas chaves são para uso interno do programa; você não precisará memorizá-las, elas podem ser aleatórias.
     - Encerre o assistente clicando em _Finish_.
     Se tiver saído do assistente de configuração por engano, pode iniciá-lo de novo em _File_ > _Setup wizard_. Todas essas opções também estão disponíveis nas configurações (_File_ > _Settings_).
 
