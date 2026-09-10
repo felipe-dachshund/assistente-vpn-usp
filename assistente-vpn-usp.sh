@@ -41,6 +41,8 @@ NC='\033[0m'
 VPN_NAME="VPN USP"
 VPN_GATEWAY="orion.uspnet.usp.br"
 VPN_PORT="31443"
+ASK=
+DRY_RUN=
 
 # --- Funções ---
 
@@ -49,20 +51,34 @@ VPN_PORT="31443"
 # Descrição: Mostra uma mensagem de ajuda com as opções de uso do script.
 #
 exibir_ajuda() {
-    echo "Uso: $0 [opção]"
+    echo "Uso: $0 -h|-v"
+    echo " ou  $0 [OPÇÃO...] AÇÃO"
     echo ""
     echo "Assistente para migração da VPN da USP para soluções de código aberto em Linux."
     echo ""
+    echo 'Ações:'
+    echo '  install    Instala e configura a nova VPN (OpenConnect ou OpenFortiVPN).'
+    echo '  remove     Remove completamente o Forticlient do sistema.'
+    echo '  help       Exibe esta mensagem de ajuda.'
+    echo '  version    Exibe a versão do assistente.'
+    echo
     echo "Opções:"
-    echo "  -i, --install    Instala e configura a nova VPN (OpenConnect ou OpenFortiVPN)."
-    echo "  -r, --remove     Remove completamente o Forticlient do sistema."
+    echo '  --nusp=NUSP      Define o NUSP do usuário.'
+    echo '  --dry-run        Não executa as ações, apenas as simula.'
+    echo '  -y, --yes        Ignora pedidos de confirmação.'
+    echo '  --openfortivpn,  Opção de compatibilidade. Em sistemas Debian 12 ou anterior,'
+    echo '   --fortisslvpn   força a instalação do NetworkManager-fortisslvpn em vez do'
+    echo '                   OpenFortiGUI.'
     echo "  -h, --help       Exibe esta mensagem de ajuda."
     echo "  -v, --version    Exibe a versão do assistente."
     echo ""
     echo "Exemplos:"
-    echo "  sudo $0 --install         # Instala a nova VPN e depois pergunta se deseja remover a antiga."
-    echo "  sudo $0 --remove          # Apenas remove o Forticlient."
-    echo "  sudo $0 --install --remove # Instala a nova VPN e remove o Forticlient sem perguntar."
+    echo "  sudo $0 --dry-run install  # Simula a instalação da VPN."
+    echo "  sudo $0 install            # Instala a nova VPN, perguntando o NUSP."
+    echo "  sudo $0 -y --nusp=12345678 # Instala a nova VPN para o NUSP 12.345.678 sem perguntar."
+    echo "  sudo $0 --dry-run remove   # Simula a remoção do Forticlient."
+    echo "  sudo $0 -y remove          # Remove o Forticlient sem perguntar."
+    echo "  sudo $0 --fortisslvpn install # Instala o NM-fortisslvpn no Debian 12, como na v. 1.0 do script."
 }
 
 #
@@ -97,9 +113,12 @@ remover_dados_usuario() {
         echo -e "${RED}Não foi possível encontrar o diretório home para o usuário $REAL_USER.${NC}" >&2
     else
         echo "Limpando diretório de configuração em '$USER_HOME'..." >&2
-        # Usamos o caminho absoluto para 'runuser' para garantir que ele seja
-        # encontrado mesmo em sessões 'su' que não incluem /usr/sbin no $PATH.
-        /usr/sbin/runuser -u "$REAL_USER" -- sh -c "rm -rf '$USER_HOME/.config/FortiClient'"
+        if [ -z "$DRY_RUN" ]; then
+            # Usando caminho absoluto para 'runuser' para garantir que ele
+            # seja encontrado mesmo em sessões 'su' que não incluem /usr/sbin
+            # no $PATH.
+            /usr/sbin/runuser -u "$REAL_USER" -- sh -c "rm -rf '$USER_HOME/.config/FortiClient'"
+        fi
     fi
 
     #TODO: Remover as chaves Forticlient de ~/.local/share/keyrings/login.keyring
@@ -119,7 +138,7 @@ remover_forticlient() {
     if command -v apt-get &> /dev/null; then
         if dpkg-query -W -f='${Status}' forticlient 2>/dev/null | grep -q "ok installed"; then
             echo "Pacote 'forticlient' encontrado. Tentando remoção completa..." >&2
-            apt-get purge -y forticlient
+            apt-get $DRY_RUN $ASK purge forticlient
             echo -e "${GREEN}Pacote 'forticlient' removido com sucesso.${NC}"
         else
             echo "Pacote 'forticlient' não está instalado. Pulando para a limpeza de arquivos residuais." >&2
@@ -127,7 +146,7 @@ remover_forticlient() {
     elif command -v dnf &> /dev/null; then
         if rpm -q forticlient > /dev/null 2>&1; then
             echo "Pacote 'forticlient' encontrado. Tentando remoção..." >&2
-            dnf remove -y forticlient
+            [ -n "$DRY_RUN" ] || dnf $ASK remove -y forticlient
             echo -e "${GREEN}Pacote 'forticlient' removido com sucesso.${NC}"
         else
             echo "Pacote 'forticlient' não está instalado. Pulando para a limpeza de arquivos residuais." >&2
@@ -138,19 +157,23 @@ remover_forticlient() {
     fi
 
     echo "Removendo diretório de configuração do Forticlient..." >&2
-    rm -rf /etc/forticlient/
+    [ -n "$DRY_RUN" ] || rm -rf /etc/forticlient/
 
     echo "Removendo arquivos de repositório..." >&2
-    rm -f /etc/apt/sources.list.d/repo.fortinet.com.list
-    rm -f /etc/yum.repos.d/fortinet.repo
+    if [ -z "$DRY_RUN" ]; then
+        rm -f /etc/apt/sources.list.d/repo.fortinet.com.list
+        rm -f /etc/yum.repos.d/fortinet.repo
+    fi
 
     echo "Removendo chaves de repositório..." >&2
     if command -v apt-get &> /dev/null; then
-        rm -f /usr/share/keyrings/repo.fortinet.com.gpg
-        rm -f /etc/apt/trusted.gpg.d/repo.fortinet.com.gpg
+        if [ -z "$DRY_RUN" ]; then
+            rm -f /usr/share/keyrings/repo.fortinet.com.gpg
+            rm -f /etc/apt/trusted.gpg.d/repo.fortinet.com.gpg
+        fi
         if command -v apt-key &> /dev/null; then
             KEY_ID=$(apt-key list 2>/dev/null | grep -B 1 "Fortinet" | head -n 1 | tr -d ' ')
-            if [ ! -z "$KEY_ID" ]; then
+            if [ -n "$KEY_ID" ] && [ -z "$DRY_RUN" ]; then
                 apt-key del "$KEY_ID" 2>/dev/null || true
             fi
         fi
@@ -163,11 +186,11 @@ remover_forticlient() {
             fi
         done
 
-        if [ ! -z "$KEY_IDS_TO_REMOVE" ]; then
+        if [ -n "$KEY_IDS_TO_REMOVE" ]; then
             echo "Removendo chaves GPG do Fortinet encontradas: $KEY_IDS_TO_REMOVE" >&2
-            rpm -e $KEY_IDS_TO_REMOVE || true
+            [ -z "$DRY_RUN" ] && rpm -e $KEY_IDS_TO_REMOVE || true
         fi
-        dnf clean all
+        [ -n "$DRY_RUN" ] || dnf clean all
     fi
 
     echo -e "${GREEN}Remoção de arquivos de sistema do Forticlient concluída!${NC}"
@@ -207,9 +230,11 @@ configurar_vpn() {
 
         if [[ "$VPN_CLIENT" == 'OpenFortiGUI' ]]; then
             echo 'Adicionando chaves e repositório do OpenFortiGUI.' >&2
-            gpg -k
-            gpg --no-default-keyring --keyring /usr/share/keyrings/iteas-keyring.gpg --keyserver hkp://keyserver.ubuntu.com:80 --recv-keys 23CAE45582EB0928
-            echo 'deb [arch=amd64 signed-by=/usr/share/keyrings/iteas-keyring.gpg] https://apt.iteas.at/iteas bookworm main' > /etc/apt/sources.list.d/iteas.list
+            if [ -z "$DRY_RUN" ]; then
+                gpg -k
+                gpg --no-default-keyring --keyring /usr/share/keyrings/iteas-keyring.gpg --keyserver hkp://keyserver.ubuntu.com:80 --recv-keys 23CAE45582EB0928
+                echo 'deb [arch=amd64 signed-by=/usr/share/keyrings/iteas-keyring.gpg] https://apt.iteas.at/iteas bookworm main' > /etc/apt/sources.list.d/iteas.list
+            fi
             PACKAGES=openfortigui
         elif [ -z "$GNOME" ]; then
             echo "Ambiente de trabalho não-GNOME detectado. Instalando apenas o pacote base." >&2
@@ -218,7 +243,8 @@ configurar_vpn() {
             PACKAGES="$PACKAGES network-manager-$PLUGIN_NAME-gnome"
         fi
         echo "Pacote(s) a ser(em) instalado(s): $PACKAGES" >&2
-        apt-get update && apt-get install -y $PACKAGES
+        apt-get update
+        apt-get $DRY_RUN $ASK install $PACKAGES || [ -n "$DRY_RUN" ]
     fi
 
     local PERMISSIONS=""
@@ -240,17 +266,19 @@ configurar_vpn() {
         CONN_PATH="/etc/NetworkManager/system-connections/$VPN_NAME.nmconnection"
         CONN_UUID=$(< /proc/sys/kernel/random/uuid)
     elif [ -n "$REAL_USER" ]; then
-        sudo -u "$REAL_USER" mkdir -p "/home/$REAL_USER/.openfortigui/vpnprofiles"
+        if [ -z "$DRY_RUN" ]; then
+            sudo -u "$REAL_USER" mkdir -p "/home/$REAL_USER/.openfortigui/vpnprofiles"
+        fi
         CONN_PATH="/home/$REAL_USER/.openfortigui/vpnprofiles/$VPN_NAME.conf"
     else
-        mkdir -p /etc/openfortigui/vpnprofiles
+        [ -n "$DRY_RUN" ] || mkdir -p /etc/openfortigui/vpnprofiles
         CONN_PATH="/etc/openfortigui/vpnprofiles/$VPN_NAME.conf"
     fi
 
-    echo "Criando arquivo de configuração para o NetworkManager em '$CONN_PATH'..." >&2
+    echo "Criando arquivo de configuração em '$CONN_PATH'..." >&2
 
     if [[ "$VPN_CLIENT" == "OpenConnect" ]]; then
-        tee "$CONN_PATH" > /dev/null << EOF
+        [ -n "$DRY_RUN" ] || tee "$CONN_PATH" > /dev/null << EOF
 [connection]
 id=$VPN_NAME
 uuid=$CONN_UUID
@@ -287,7 +315,7 @@ method=auto
 [proxy]
 EOF
     elif [[ "$VPN_CLIENT" == 'OpenFortiVPN' ]]; then
-        tee "$CONN_PATH" > /dev/null << EOF
+        [ -n "$DRY_RUN" ] || tee "$CONN_PATH" > /dev/null << EOF
 [connection]
 id=$VPN_NAME
 uuid=$CONN_UUID
@@ -311,7 +339,7 @@ method=auto
 
 [proxy]
 EOF
-    else
+    elif [ -z "$DRY_RUN" ]; then
         tee "$CONN_PATH" > /dev/null << EOF
 [cert]
 ca_file=
@@ -357,16 +385,20 @@ EOF
     fi
 
     if [ -n "$CONN_UUID" ]; then
-        chmod 600 "$NM_CONN_PATH"
-        chown root:root "$NM_CONN_PATH"
+        if [ -z "$DRY_RUN" ]; then
+            chmod 600 "$CONN_PATH"
+            chown root:root "$CONN_PATH"
+        fi
 
         echo "Recarregando as conexões do NetworkManager..." >&2
-        if nmcli connection reload; then
-            echo -e "${GREEN}Conexões do NetworkManager recarregadas com sucesso.${NC}"
-        else
-            echo -e "${RED}Houve um erro ao recarregar as conexões do NetworkManager.${NC}" >&2
+        if [ -z "$DRY_RUN" ]; then
+            if nmcli connection reload; then
+                echo -e "${GREEN}Conexões do NetworkManager recarregadas com sucesso.${NC}"
+            else
+                echo -e "${RED}Houve um erro ao recarregar as conexões do NetworkManager.${NC}" >&2
+            fi
         fi
-    elif [ -n "$REAL_USER" ]; then
+    elif [ -n "$REAL_USER" ] && [ -z "$DRY_RUN" ]; then
         chown "$REAL_USER:$REAL_USER" "$CONN_PATH"
     fi
 
@@ -404,37 +436,59 @@ main() {
         exit 1
     fi
 
-    local ACTION_INSTALL=false
-    local ACTION_REMOVE=false
-    while [[ $# -gt 0 ]]; do
-        key="$1"
-        case $key in
-            -i|--install)
-            ACTION_INSTALL=true
-            ;;
-            -r|--remove)
-            ACTION_REMOVE=true
-            ;;
-            -h|--help)
+    args=$(getopt -o 'yhv' -l 'nusp:,yes,dry-run,openfortivpn,fortisslvpn,help,version' -- "$@")
+    eval "set -- $args"
+
+    local VPN_CLIENT=OpenConnect
+    while true; do
+        case $1 in
+        --nusp)
+            shift
+            NUSP=$1;;
+        -y|--yes) ASK='--yes';;
+        --dry-run) DRY_RUN='--dry-run';;
+        --openfortivpn|--fortisslvpn) VPN_CLIENT=OpenFortiVPN;;
+        -h|--help)
             exibir_ajuda
-            exit 0
-            ;;
-            -v|--version)
+            exit;;
+        -v|--version)
             echo $THIS_VERSION
-            exit 0
-            ;;
-            *)
-            echo -e "${RED}Opção inválida: $1${NC}" >&2
+            exit;;
+        --)
+            shift
+            break;;
+        -*)
+            echo -e "${RED}Opção inválida: $1$NC" >&2
             exibir_ajuda
-            exit 1
-            ;;
+            exit 1;;
         esac
         shift
     done
 
+    if [ $# -eq 0 ] || [ -z "$1" ]; then
+        echo -e "${RED}AÇÃO ausente.$NC" >&2
+    fi
+    if [ $# -ne 1 ]; then 
+        exibir_ajuda
+        exit 1
+    fi
+
+    local ACTION="$1"
+    if [ "$ACTION" == 'help' ]; then
+        exibir_ajuda
+        exit
+    elif [ "$ACTION" == 'version' ]; then
+        echo $THIS_VERSION
+        exit
+    elif [ "$ACTION" != 'install' ] && [ "$ACTION" != 'remove' ]; then
+        echo -e "${RED}Ação desconhecida: $ACTION$NC" >&2
+        exibir_ajuda
+        exit 1
+    fi
+
     if [ "$EUID" -ne 0 ]; then
       echo -e "${RED}Esta operação requer privilégios de superusuário.${NC}" >&2
-      echo -e "${YELLOW}Por favor, execute o comando novamente com 'sudo'. Ex: sudo $0 --install${NC}" >&2
+      echo -e "${YELLOW}Por favor, execute o comando novamente com 'sudo'. Ex: sudo $0 install${NC}" >&2
       exit 2
     fi
 
@@ -443,7 +497,7 @@ main() {
       REAL_USER=""
     fi
 
-    if [ "$ACTION_INSTALL" = true ]; then
+    if [ "$ACTION" = 'install' ]; then
         if [ ! -f /etc/os-release ]; then
             echo -e "${RED}Não foi possível encontrar o arquivo /etc/os-release para determinar a sua distribuição. Saindo.${NC}" >&2
             exit 3
@@ -452,25 +506,13 @@ main() {
 
         echo -e "\nDetectando distribuição: ${NAME:-'desconhecida'} ${VERSION:-''}" >&2
 
-        local VPN_CLIENT="OpenConnect"
         if [[ "${ID:-}" == "debian" || "${ID_LIKE:-}" == "debian" ]] && [[ "${VERSION_ID%%.*}" -lt 13 ]]; then
-            VPN_CLIENT=OpenfortiGUI
+            VPN_CLIENT=OpenFortiGUI
         fi
         configurar_vpn "$REAL_USER" "$VPN_CLIENT"
-    fi
-
-    if [ "$ACTION_REMOVE" = true ]; then
+    elif [ "$ACTION" = 'remove' ]; then
         remover_forticlient "$REAL_USER"
-    elif [ "$ACTION_INSTALL" = true ]; then
-        read -p $'\n\nA nova VPN foi configurada. Deseja remover o Forticlient agora? (s/n): ' remove_choice
-        if [[ "$remove_choice" =~ ^[Ss]$ ]]; then
-            remover_forticlient "$REAL_USER"
-        else
-            echo -e "\nOk. Você pode executar 'sudo $0 --remove' para remover o Forticlient mais tarde."
-        fi
     fi
-
-    echo -e "\n${GREEN}Operação concluída!${NC}"
 }
 
 main "$@"

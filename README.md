@@ -25,14 +25,18 @@ Um script em Bash que automatiza a configuração da VPN da Universidade de São
 
 - **Para instalar a nova VPN:**
     ```bash
-    sudo ./assistente-vpn-usp.sh --install
+    sudo ./assistente-vpn-usp.sh install
     ```
-    O script solicitará seu Número USP, se necessário, e configurará tudo. Ao final, ele perguntará se você deseja remover o FortiClient.
+    ou, para um usuário de Nº USP 12.345.678,
+    ```bash
+    sudo ./assistente-vpn-usp.sh --nusp=12345678 install
+    ```
+    Na primeira forma, o script pede o Nº USP se necessário.
 
 - **Para remover o FortiClient:**
     Se você já tem a nova VPN funcionando ou quer apenas limpar uma instalação antiga, use:
     ```bash
-    sudo ./assistente-vpn-usp.sh --remove
+    sudo ./assistente-vpn-usp.sh remove
     ```
 
 > **Aviso:** Antes de remover o FortiClient, garanta que todas as suas conexões VPN importantes já foram migradas para o novo software e estão funcionando corretamente.
