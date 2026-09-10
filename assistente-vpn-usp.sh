@@ -24,7 +24,7 @@ set -e
 # Script para instalação e configuração da VPN da USP em Linux
 #
 # Objetivo: Automatizar a instalação de clientes VPN de código aberto
-# (OpenConnect/OpenfortiVPN) e, opcionalmente, remover o Forticlient em
+# (OpenConnect/OpenFortiVPN) e, opcionalmente, remover o Forticlient em
 # distribuições Linux (Debian, Ubuntu e Fedora).
 #
 # ==============================================================================
@@ -54,7 +54,7 @@ exibir_ajuda() {
     echo "Assistente para migração da VPN da USP para soluções de código aberto em Linux."
     echo ""
     echo "Opções:"
-    echo "  -i, --install    Instala e configura a nova VPN (OpenConnect ou OpenfortiVPN)."
+    echo "  -i, --install    Instala e configura a nova VPN (OpenConnect ou OpenFortiVPN)."
     echo "  -r, --remove     Remove completamente o Forticlient do sistema."
     echo "  -h, --help       Exibe esta mensagem de ajuda."
     echo "  -v, --version    Exibe a versão do assistente."
@@ -176,52 +176,81 @@ remover_forticlient() {
 
 #
 # Função: configurar_vpn
-# Descrição: Instala e configura o OpenConnect ou o OpenfortiVPN, conforme os
-# parâmetros fornecidos.
+# Descrição: Instala e configura o OpenConnect, o OpenFortiVPN ou o
+# OpenFortiGUI, conforme os parâmetros fornecidos.
 #
 configurar_vpn() {
     local REAL_USER="$1"
     local VPN_CLIENT="$2"
     local PLUGIN_NAME="openconnect"
-    if [[ "$VPN_CLIENT" == "OpenfortiVPN" ]]; then
+    if [[ "$VPN_CLIENT" == "OpenFortiVPN" ]]; then
         PLUGIN_NAME="fortisslvpn"
     fi
 
-    echo -e "\n${YELLOW}--- Configurando VPN com $VPN_CLIENT (via NetworkManager) ---${NC}" >&2
-    if [[ "$VPN_CLIENT" == "OpenfortiVPN" ]]; then
+    if [[ "$VPN_CLIENT" == 'OpenFortiGUI' ]]; then
+        echo -e "\n${YELLOW}--- Configurando VPN com OpenFortiVPN (via OpenFortiGUI) ---${NC}" >&2
+    else
+        echo -e "\n${YELLOW}--- Configurando VPN com $VPN_CLIENT (via NetworkManager) ---${NC}" >&2
+    fi
+    if [[ "$VPN_CLIENT" == "OpenFortiVPN" ]] || [[ "$VPN_CLIENT" == 'OpenFortiGUI' ]]; then
         solicitar_nusp
     fi
 
     if command -v apt-get &> /dev/null; then
-        local NM_PACKAGES="network-manager-$PLUGIN_NAME"
+        local PACKAGES="network-manager-$PLUGIN_NAME"
+        local GNOME=
         if echo "$XDG_CURRENT_DESKTOP" | grep -qi "gnome"; then
-            echo "Ambiente de trabalho GNOME detectado (via \$XDG_CURRENT_DESKTOP). Adicionando pacote de integração." >&2
-            NM_PACKAGES="$NM_PACKAGES network-manager-$PLUGIN_NAME-gnome"
+            GNOME='$XDG_CURRENT_DESKTOP'
         elif command -v gnome-session &> /dev/null; then
-            echo "Ambiente de trabalho GNOME detectado (via comando 'gnome-session'). Adicionando pacote de integração." >&2
-            NM_PACKAGES="$NM_PACKAGES network-manager-$PLUGIN_NAME-gnome"
-        else
-            echo "Ambiente de trabalho não-GNOME detectado. Instalando apenas o pacote base." >&2
+            GNOME="comando 'gnome-session'"
         fi
-        echo "Pacote(s) a ser(em) instalado(s): $NM_PACKAGES" >&2
-        apt-get update && apt-get install -y $NM_PACKAGES
-    fi
 
-    local CONN_UUID=$(< /proc/sys/kernel/random/uuid)
+        if [[ "$VPN_CLIENT" == 'OpenFortiGUI' ]]; then
+            echo 'Adicionando chaves e repositório do OpenFortiGUI.' >&2
+            gpg -k
+            gpg --no-default-keyring --keyring /usr/share/keyrings/iteas-keyring.gpg --keyserver hkp://keyserver.ubuntu.com:80 --recv-keys 23CAE45582EB0928
+            echo 'deb [arch=amd64 signed-by=/usr/share/keyrings/iteas-keyring.gpg] https://apt.iteas.at/iteas bookworm main' > /etc/apt/sources.list.d/iteas.list
+            PACKAGES=openfortigui
+        elif [ -z "$GNOME" ]; then
+            echo "Ambiente de trabalho não-GNOME detectado. Instalando apenas o pacote base." >&2
+        else
+            echo "Ambiente de trabalho GNOME detectado (via $GNOME). Adicionando pacote de integração." >&2
+            PACKAGES="$PACKAGES network-manager-$PLUGIN_NAME-gnome"
+        fi
+        echo "Pacote(s) a ser(em) instalado(s): $PACKAGES" >&2
+        apt-get update && apt-get install -y $PACKAGES
+    fi
 
     local PERMISSIONS=""
     if [ -n "$REAL_USER" ]; then
         PERMISSIONS="user:$REAL_USER:;"
         echo "Configurando permissões da VPN para o usuário: $REAL_USER" >&2
     else
-        echo "Não foi possível determinar o usuário padrão. A VPN será configurada como uma conexão de sistema." >&2
+        echo -n 'Não foi possível determinar o usuário padrão. A VPN será configurada como ' >&2
+        if [[ "$VPN_CLIENT" == 'OpenFortiGUI' ]]; then
+            echo 'global.' >&2
+        else
+            echo 'uma conexão de sistema.' >&2
+        fi
     fi
 
-    local NM_CONN_PATH="/etc/NetworkManager/system-connections/$VPN_NAME.nmconnection"
-    echo "Criando arquivo de configuração para o NetworkManager em '$NM_CONN_PATH'..." >&2
+    local CONN_PATH=
+    local CONN_UUID=
+    if [[ "$VPN_CLIENT" != 'OpenFortiGUI' ]]; then
+        CONN_PATH="/etc/NetworkManager/system-connections/$VPN_NAME.nmconnection"
+        CONN_UUID=$(< /proc/sys/kernel/random/uuid)
+    elif [ -n "$REAL_USER" ]; then
+        sudo -u "$REAL_USER" mkdir -p "/home/$REAL_USER/.openfortigui/vpnprofiles"
+        CONN_PATH="/home/$REAL_USER/.openfortigui/vpnprofiles/$VPN_NAME.conf"
+    else
+        mkdir -p /etc/openfortigui/vpnprofiles
+        CONN_PATH="/etc/openfortigui/vpnprofiles/$VPN_NAME.conf"
+    fi
+
+    echo "Criando arquivo de configuração para o NetworkManager em '$CONN_PATH'..." >&2
 
     if [[ "$VPN_CLIENT" == "OpenConnect" ]]; then
-        tee "$NM_CONN_PATH" > /dev/null << EOF
+        tee "$CONN_PATH" > /dev/null << EOF
 [connection]
 id=$VPN_NAME
 uuid=$CONN_UUID
@@ -257,8 +286,8 @@ method=auto
 
 [proxy]
 EOF
-    else
-        tee "$NM_CONN_PATH" > /dev/null << EOF
+    elif [[ "$VPN_CLIENT" == 'OpenFortiVPN' ]]; then
+        tee "$CONN_PATH" > /dev/null << EOF
 [connection]
 id=$VPN_NAME
 uuid=$CONN_UUID
@@ -282,27 +311,85 @@ method=auto
 
 [proxy]
 EOF
+    else
+        tee "$CONN_PATH" > /dev/null << EOF
+[cert]
+ca_file=
+trust_all_gw_certs=true
+trusted_cert=
+user_cert=
+user_key=
+verify_cert=false
+
+[options]
+always_ask_otp=false
+autostart=false
+debug=false
+half_internet_routers=false
+insecure_ssl=false
+min_tls=Default
+otp_delay=0
+otp_prompt=
+pppd_accept_remote=true
+pppd_call=
+pppd_ifname=
+pppd_ipparam=
+pppd_log_file=
+pppd_no_peerdns=false
+pppd_plugin_file=
+realm=
+saml_login=false
+saml_port=8020
+seclevel1=false
+set_dns=true
+set_routes=true
+
+[vpn]
+cookie=
+device_type=0
+gateway_host=orion.uspnet.usp.br
+gateway_port=31443
+name=VPN USP
+persistent=false
+sni=
+username=$NUSP
+EOF
     fi
 
-    chmod 600 "$NM_CONN_PATH"
-    chown root:root "$NM_CONN_PATH"
+    if [ -n "$CONN_UUID" ]; then
+        chmod 600 "$NM_CONN_PATH"
+        chown root:root "$NM_CONN_PATH"
 
-    echo "Recarregando as conexões do NetworkManager..." >&2
-    if nmcli connection reload; then
-        echo -e "${GREEN}Conexões do NetworkManager recarregadas com sucesso.${NC}"
-    else
-        echo -e "${RED}Houve um erro ao recarregar as conexões do NetworkManager.${NC}" >&2
+        echo "Recarregando as conexões do NetworkManager..." >&2
+        if nmcli connection reload; then
+            echo -e "${GREEN}Conexões do NetworkManager recarregadas com sucesso.${NC}"
+        else
+            echo -e "${RED}Houve um erro ao recarregar as conexões do NetworkManager.${NC}" >&2
+        fi
+    elif [ -n "$REAL_USER" ]; then
+        chown "$REAL_USER:$REAL_USER" "$CONN_PATH"
     fi
 
     echo -e "\n${GREEN}Configuração do $VPN_CLIENT concluída!${NC}"
     echo "Uma nova conexão chamada '$VPN_NAME' foi criada."
     echo "Para conectar:"
-    echo "1. Vá até as configurações de rede do seu sistema."
-    echo "2. Ative a VPN '$VPN_NAME'."
-    if [[ "$VPN_CLIENT" == "OpenConnect" ]]; then
-        echo "3. Na primeira vez, ele pedirá seu NUSP e sua senha única. Você pode salvá-la."
+    if [[ "$VPN_CLIENT" == 'OpenFortiGUI' ]]; then
+        echo '1. Abra o OpenFortiGUI.'
+        echo '2. Na primeira vez:'
+        echo '   - Siga o assistente de configuração clicando em "Next".'
+        echo '   - Marque a caixa "Password Manager", clique em "Autogenerate keys" e "Finish"'
+        echo '     (não use as senhas iniciais que começam com yowp2... e VoUT5...).'
+        echo "   - Clique duas vezes na VPN '$VPN_NAME' para editá-la, insira sua senha única"
+        echo "     no campo 'Password' e clique em 'Save'."
+        echo "3. Selecione a VPN '$VPN_NAME' e clique em 'Connect'."
     else
-        echo "3. Na primeira vez, ele pedirá sua senha única."
+        echo "1. Vá até as configurações de rede do seu sistema."
+        echo "2. Ative a VPN '$VPN_NAME'."
+        if [[ "$VPN_CLIENT" == "OpenConnect" ]]; then
+            echo "3. Na primeira vez, ele pedirá seu NUSP e sua senha única. Você pode salvá-la."
+        else
+            echo "3. Na primeira vez, ele pedirá sua senha única."
+        fi
     fi
 }
 
@@ -367,7 +454,7 @@ main() {
 
         local VPN_CLIENT="OpenConnect"
         if [[ "${ID:-}" == "debian" || "${ID_LIKE:-}" == "debian" ]] && [[ "${VERSION_ID%%.*}" -lt 13 ]]; then
-            VPN_CLIENT=OpenfortiVPN
+            VPN_CLIENT=OpenfortiGUI
         fi
         configurar_vpn "$REAL_USER" "$VPN_CLIENT"
     fi
