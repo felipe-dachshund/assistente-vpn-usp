@@ -103,8 +103,8 @@ remover_dados_usuario() {
     fi
 
     #TODO: Remover as chaves Forticlient de ~/.local/share/keyrings/login.keyring
-    echo -e "\n${YELLOW}Atenção: Se você salvou sua senha no Forticlient, ela pode permanecer no chaveiro do sistema.${NC}" &>2
-    echo "Para removê-la com segurança, siga as instruções na seção 'Remoção Manual' do nosso guia." &>2
+    echo -e "\n${YELLOW}Atenção: Se você salvou sua senha no Forticlient, ela pode permanecer no chaveiro do sistema.${NC}" >&2
+    echo "Para removê-la com segurança, siga as instruções na seção 'Remoção Manual' do nosso guia." >&2
 }
 
 #
