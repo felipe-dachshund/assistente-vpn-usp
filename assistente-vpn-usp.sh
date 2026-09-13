@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 #
-# assistente-vpn-usp.sh
+# assistente-vpn-usp.sh, v. 2.0
 #
-# Copyright (C) 2025 Felipe Oliveira da Silva Netto
+# Copyright (C) 2025-2026 Felipe Oliveira da Silva Netto
 #
 # Este programa é software livre: você pode redistribuí-lo e/ou modificá-lo
 # sob os termos da Licença Pública Geral GNU, conforme publicada pela Free
@@ -29,7 +29,7 @@ set -e
 #
 # ==============================================================================
 
-THIS_VERSION=1.0
+THIS_VERSION=2.0
 
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
