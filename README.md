@@ -1,6 +1,6 @@
 # Assistente de Configuração da VPN da USP
 
-Um script em Bash que automatiza a configuração da VPN da Universidade de São Paulo (USP) em distribuições Linux. Ele instala clientes de código aberto (OpenConnect ou Openfortivpn), configura a conexão e, opcionalmente, remove por completo o software proprietário FortiClient.
+Um script em Bash que automatiza a configuração da VPN da Universidade de São Paulo (USP) em distribuições Linux. Ele instala clientes de código aberto (OpenConnect ou OpenFortiVPN), configura a conexão e, opcionalmente, remove por completo o software proprietário FortiClient.
 
 ## Por que usar este script?
 
@@ -34,30 +34,32 @@ Um script em Bash que automatiza a configuração da VPN da Universidade de São
     Na primeira forma, o script pede o Nº USP se necessário.
 
 - **Para remover o FortiClient:**
+
     Se você já tem a nova VPN funcionando ou quer apenas limpar uma instalação antiga, use:
     ```bash
     sudo ./assistente-vpn-usp.sh remove
     ```
 
-> **Aviso:** Antes de remover o FortiClient, garanta que todas as suas conexões VPN importantes já foram migradas para o novo software e estão funcionando corretamente.
+    **Aviso:** Antes de remover o FortiClient, garanta que todas as suas conexões VPN importantes já foram migradas para o novo software e estão funcionando corretamente.
+
+Para conhecer outras opções e possibilidades de uso, experimente `./assistente-vpn-usp help`.
 
 ## Como testar se a VPN funcionou
 
-Não importa como você instalou, o teste é o mesmo:
 1.  Conecte-se à VPN.
 2.  Acesse o [Portal de Periódicos da CAPES](https://www.periodicos.capes.gov.br/).
-3.  Se a conexão foi bem-sucedida, você verá a mensagem **"Você está acessando esse portal por: USP"** logo abaixo do título do site. Do contrário, você verá a mensagem "Você tem acesso ao conteúdo gratuito do Portal de Periódicos da CAPES".
+3.  Se a conexão foi bem-sucedida, você verá a mensagem "**Você está acessando esse portal por:** USP" logo abaixo do título do site. Do contrário, você verá a mensagem "Você tem acesso ao conteúdo gratuito do Portal de Periódicos da CAPES".
 
 ## Compatibilidade
 
 O script foi testado e é compatível com as seguintes distribuições Linux:
 
-- **Debian** 12 ou superior (GNOME e KDE)
-- **Ubuntu** 24.04 ou superior
-- **Kubuntu** 25.10
-- **Fedora** 42
+- **Debian** 12 e 13 (GNOME e KDE)
+- **Ubuntu** 24.04 ou superior (até 26.04 LTS)
+- **Kubuntu** 25.10 ou superior (até 26.04 LTS)
+- **Fedora** 42 e 44 (Workstation e KDE)
 
-Ele deve funcionar em derivados (como Linux Mint), mas não foi testado formalmente.
+Ele deve funcionar em derivados com GNOME e KDE, mas não foi testado formalmente.
 
 ## Instalação Manual e Outras Plataformas
 
