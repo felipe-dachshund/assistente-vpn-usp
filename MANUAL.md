@@ -55,6 +55,7 @@ A solução ideal varia conforme a versão da sua distribuição Linux, devido �
     - Salve a configuração.
 
 5.  **Conecte-se:**
+
     Ao conectar pela primeira vez, o sistema pedirá seu nome de usuário (NUSP) e senha (senha única). Você pode optar por salvá-los para futuros acessos.
 
 ### Usando OpenFortiGUI
@@ -62,6 +63,7 @@ A solução ideal varia conforme a versão da sua distribuição Linux, devido �
 O OpenFortiGUI é uma interface gráfica em Qt e já vem com OpenFortiVPN. É uma alternativa razoável no Debian 12, onde o NetworkManager-OpenConnect pode não funcionar para o protocolo Fortinet, mas também funciona no Debian 13 e no (K)Ubuntu.
 
 1.  Siga as instruções em https://apt.iteas.at/ para adicionar o repositório APT.
+
     Obs.: Pode ser necessário entrar numa sessão de _root_ para conseguir executar os comandos sem erro. Faça isso com o comando `su` ou com `sudo su` e, ao terminar, execute `exit` para sair da sessão de _root_ e voltar à anterior.
 
 2.  Atualize a lista de programas e instale o OpenFortiGUI:
@@ -75,6 +77,7 @@ O OpenFortiGUI é uma interface gráfica em Qt e já vem com OpenFortiVPN. É um
     - Recomenda-se selecionar a caixa _Password Manager_ para que a chave criptográfica do openFortiGUI seja armazenada no chaveiro do sistema, mais bem protegida.
     - Recomenda-se também clicar no botão _Autogenerate keys_. Aquelas chaves _default_ do openFortiGUI, começando com yowp2… e VoUT5… são fixas e, portanto, não seguras. Além disso, essas chaves são para uso interno do programa; você não precisará memorizá-las, elas podem ser aleatórias.
     - Encerre o assistente clicando em _Finish_.
+
     Se tiver saído do assistente de configuração por engano, pode iniciá-lo de novo em _File_ > _Setup wizard_. Todas essas opções também estão disponíveis nas configurações (_File_ > _Settings_).
 
 4.  Para criar um novo perfil VPN, clique em _Add_ > _VPN_ e preencha os campos da caixa de diálogo:
@@ -92,7 +95,9 @@ O OpenFortiGUI é uma interface gráfica em Qt e já vem com OpenFortiVPN. É um
     - Aba _Options_
         - **PPPD**
             - [x] Accept remote
+
                 **Atenção:** Marque a caixa _à direita_; a da esquerda é outro campo.
+
     - Clique em _Save_.
 
 5.  Para se conectar, selecione o perfil VPN desejado e clique em _Connect_.
@@ -121,7 +126,9 @@ Outra alternativa para Debian 12 é o OpenFortiVPN integrado ao NetworkManager. 
             - **Nome:** VPN USP (ou o nome que preferir)
             - **Gateway:** `orion.uspnet.usp.br:31443`
             - **Nome de usuário:** NUSP
+
         Se preferir, clique no ícone do campo **Senha**, escolha para armazená-la e insira sua senha única.
+
     - **KDE:**
         - Preencha o campo **Nome da conexão** com `VPN USP`. Na aba **VPN (fortisslvpn)**, preencha os demais campos:
             - **Gateway:** `orion.uspnet.usp.br:31443`
@@ -149,6 +156,7 @@ Outra alternativa para Debian 12 é o OpenFortiVPN integrado ao NetworkManager. 
 ## Instalação e Configuração no Android
 
 1.  **Instale o cliente OpenConnect** a partir do [F-Droid](https://f-droid.org/packages/net.openconnect_vpn.android/).
+
     **Atenção:** Não instale versões da Play Store. A versão do F-Droid é a oficial, livre de anúncios e de código aberto.
 
 2.  **Abra o app e adicione um novo perfil** (`+` no canto superior direito).
@@ -156,8 +164,11 @@ Outra alternativa para Debian 12 é o OpenFortiVPN integrado ao NetworkManager. 
 4.  **Edite o perfil criado.** Na seção _Server_, preencha os campos:
     - **Profile name:** VPN USP
     - **VPN Protocol:** Fortinet SSL VPN
+
     Na seção _Advanced_, desmarque a caixa _Use DTLS_.
+
 5.  **Conecte-se:**
+
     Toque no perfil **VPN USP**. Na primeira vez, insira seu NUSP e senha única. Marque a opção para salvar a senha, se desejar.
 
 ## Remoção Manual Completa do FortiClient
@@ -198,12 +209,14 @@ Se você já migrou suas conexões e deseja remover o FortiClient manualmente, s
     - **Fedora:**
         ```bash
         # Encontra e remove as chaves GPG do Fortinet
-        rpm -qa gpg-pubkey* | xargs -I {} sh -c 'rpm -qi {} 2>/dev/null | grep -q "Fortinet" && echo {}' | xargs sudo rpm -e
+        rpm -qa gpg-pubkey* | xargs -I {} sh -c 'rpm -qi {} 2>/dev/null | grep -q "Fortinet" && echo {}' | xargs sudo rpmkeys --delete
         sudo dnf clean all
         ```
 
 5.  (Opcional) Remova senhas salvas:
+
     O FortiClient pode salvar credenciais no chaveiro do sistema.
+
     - Instale o aplicativo `seahorse` (Senhas e chaves), se não o tiver:
         - **Debian/Ubuntu:** `sudo apt install seahorse`
         - **Fedora:** `sudo dnf install seahorse`
