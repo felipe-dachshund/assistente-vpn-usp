@@ -24,7 +24,7 @@ set -e
 # Script para instalação e configuração da VPN da USP em Linux
 #
 # Objetivo: Automatizar a instalação de clientes VPN de código aberto
-# (OpenConnect/OpenFortiVPN) e, opcionalmente, remover o Forticlient em
+# (OpenConnect/OpenFortiVPN) e, opcionalmente, remover o FortiClient em
 # distribuições Linux (Debian, Ubuntu e Fedora).
 #
 # ==============================================================================
@@ -54,7 +54,7 @@ exibir_ajuda() {
     echo
     echo 'Ações:'
     echo '  install    Instala e configura a nova VPN (OpenConnect ou OpenFortiVPN).'
-    echo '  remove     Remove completamente o Forticlient do sistema.'
+    echo '  remove     Remove completamente o FortiClient do sistema.'
     echo '  help       Exibe esta mensagem de ajuda.'
     echo '  version    Exibe a versão do assistente.'
     echo
@@ -72,8 +72,8 @@ exibir_ajuda() {
     echo "  $0 --dry-run install       # Simula a instalação da VPN."
     echo "  sudo $0 install            # Instala a nova VPN, perguntando o NUSP."
     echo "  sudo $0 -y --nusp=12345678 install # Instala a nova VPN para o NUSP 12.345.678 sem perguntar."
-    echo "  $0 --dry-run remove        # Simula a remoção do Forticlient."
-    echo "  sudo $0 -y remove          # Remove o Forticlient sem perguntar."
+    echo "  $0 --dry-run remove        # Simula a remoção do FortiClient."
+    echo "  sudo $0 -y remove          # Remove o FortiClient sem perguntar."
     echo "  sudo $0 --fortisslvpn install # Instala o NM-fortisslvpn no Debian 12, como na v. 1.0 do script."
 }
 
@@ -103,7 +103,7 @@ remover_dados_usuario() {
         return
     fi
 
-    echo "Verificando arquivos de configuração do Forticlient na pasta do usuário '$REAL_USER'..." >&2
+    echo "Verificando arquivos de configuração do FortiClient na pasta do usuário '$REAL_USER'..." >&2
     local USER_HOME=$(getent passwd "$REAL_USER" | cut -d: -f6)
     if [[ -z "$USER_HOME" || ! -d "$USER_HOME" ]]; then
         echo -e "${RED}Não foi possível encontrar o diretório home para o usuário '$REAL_USER'.$NC" >&2
@@ -117,19 +117,19 @@ remover_dados_usuario() {
         fi
     fi
 
-    #TODO: Remover as chaves Forticlient de ~/.local/share/keyrings/login.keyring
-    echo -e "\n${YELLOW}Atenção: Se você salvou sua senha no Forticlient, ela pode permanecer no chaveiro do sistema.$NC" >&2
+    #TODO: Remover as chaves FortiClient de ~/.local/share/keyrings/login.keyring
+    echo -e "\n${YELLOW}Atenção: Se você salvou sua senha no FortiClient, ela pode permanecer no chaveiro do sistema.$NC" >&2
     echo "Para removê-la com segurança, siga as instruções na seção 'Remoção Manual' do nosso guia." >&2
 }
 
 #
 # Função: remover_forticlient
-# Descrição: Realiza a remoção completa do Forticlient, incluindo pacotes,
+# Descrição: Realiza a remoção completa do FortiClient, incluindo pacotes,
 # arquivos de configuração, repositórios e chaves GPG.
 #
 remover_forticlient() {
     local REAL_USER="$1"
-    echo -e "\n$YELLOW--- Iniciando a remoção completa do Forticlient ---$NC" >&2
+    echo -e "\n$YELLOW--- Iniciando a remoção completa do FortiClient ---$NC" >&2
 
     if command -v apt-get &> /dev/null; then
         if dpkg-query -W -f='${Status}' forticlient 2>/dev/null | grep -q 'ok installed'; then
@@ -159,7 +159,7 @@ remover_forticlient() {
         return 1
     fi
 
-    echo 'Removendo diretório de configuração do Forticlient...' >&2
+    echo 'Removendo diretório de configuração do FortiClient...' >&2
     [ -n "$DRY_RUN" ] || rm -rf /etc/forticlient/
 
     echo 'Removendo arquivos de repositório...' >&2
@@ -200,7 +200,7 @@ remover_forticlient() {
         [ -n "$DRY_RUN" ] || dnf clean all
     fi
 
-    echo -e "${GREEN}Remoção de arquivos de sistema do Forticlient concluída!$NC"
+    echo -e "${GREEN}Remoção de arquivos de sistema do FortiClient concluída!$NC"
     remover_dados_usuario "$REAL_USER"
 }
 
@@ -437,6 +437,7 @@ EOF
         else
             echo '3. Na primeira vez, ele pedirá sua senha única.'
         fi
+        echo 'Se não estiver conseguindo se conectar, experimente reiniciar o computador.'
     fi
 }
 
