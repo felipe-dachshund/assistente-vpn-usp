@@ -1,0 +1,15 @@
+FROM fedora:42
+
+RUN dnf -y install \
+    bash \
+    util-linux \
+    python3 \
+    NetworkManager \
+    NetworkManager-openconnect \
+    NetworkManager-openconnect-gnome \
+    && dnf clean all
+
+WORKDIR /app
+COPY . /app
+
+CMD ["python3", "tests/test_assistente.py", "-v"]
