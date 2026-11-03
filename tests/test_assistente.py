@@ -110,10 +110,16 @@ class TestNUSPValidation(BaseScriptTestCase):
 
 class TestDesktopEnvironmentDetection(BaseScriptTestCase):
     """
-    Verifica se ambientes que utilizam GTK4 (GNOME, Xfce, MATE, Cinnamon, LXDE,
-    COSMIC etc.) incluem o pacote de integração gráfica
-    'network-manager-openconnect-gnome', enquanto o KDE Plasma instala apenas
-    o pacote base.
+    Verifica a lógica de detecção de ambiente gráfico:
+    - KDE/Plasma: instala apenas o pacote base (usa plasma-nm nativo).
+    - Qualquer outra sessão gráfica não-KDE: detectada como GTK e recebe
+      o pacote de integração 'network-manager-openconnect-gnome'.
+    - Headless / CLI (sem DE identificado): instala apenas o pacote base.
+
+    A detecção GTK é feita por exclusão: qualquer XDG_CURRENT_DESKTOP com
+    valor não vazio e não 'none' que não seja KDE/Plasma é tratado como GTK,
+    tornando o script compatível com DEs atuais e futuros sem necessitar de
+    lista de nomes (GNOME, Xfce, MATE, Cinnamon, LXDE, COSMIC, Budgie…).
     """
 
     def test_gnome_desktop(self):
@@ -168,7 +174,12 @@ class TestDesktopEnvironmentDetection(BaseScriptTestCase):
         self.assertIn("network-manager-openconnect", output_packages[0])
 
     def test_headless_cli_environment(self):
-        res = self.run_script(["--dry-run", "install"], env={"XDG_CURRENT_DESKTOP": "none"})
+        # Simula ambiente sem DE: limpa display e define XDG_CURRENT_DESKTOP vazio
+        res = self.run_script(
+            ["--dry-run", "install"],
+            env={"XDG_CURRENT_DESKTOP": "", "DESKTOP_SESSION": "", "XDG_SESSION_DESKTOP": "",
+                 "DISPLAY": "", "WAYLAND_DISPLAY": ""},
+        )
         self.assertEqual(res.returncode, 0)
         self.assertIn("Ambiente gráfico não detectado", res.stderr)
         output_packages = [line for line in res.stderr.splitlines() if "Pacote(s) a ser(em) instalado(s):" in line]

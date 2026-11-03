@@ -218,89 +218,77 @@ remover_forticlient() {
 # Função: detectar_ambiente_desktop
 # Descrição: Identifica o ambiente gráfico atual e define as variáveis
 # globais DESKTOP_TYPE ('GTK', 'KDE' ou 'NONE') e DESKTOP_NAME.
-# Ambientes que usam a interface GTK: GNOME, Xfce, MATE, Cinnamon,
-# LXDE, COSMIC, Budgie, Pantheon, Unity, etc.
-# O KDE Plasma utiliza sua própria interface nativa via plasma-nm.
+# Lógica: KDE/Plasma recebe tratamento especial (usa plasma-nm nativo);
+# qualquer outra sessão gráfica não-KDE é tratada como GTK, pois
+# network-manager-*-gnome funciona em todos os ambientes GTK; servidores
+# e sessões sem display são tratados como headless (NONE).
 #
 detectar_ambiente_desktop() {
     DESKTOP_TYPE='NONE'
     DESKTOP_NAME=''
 
     local desktop_raw="${XDG_CURRENT_DESKTOP:-${DESKTOP_SESSION:-${XDG_SESSION_DESKTOP:-}}}"
+    local display_raw="${DISPLAY:-${WAYLAND_DISPLAY:-}}"
 
-    # Se estiver sob sudo e a variável não foi preservada, busca no processo do usuário real
-    if [ -z "$desktop_raw" ] && [ -n "${REAL_USER:-}" ]; then
+    # Se estiver sob sudo e as variáveis não foram preservadas, busca no processo do usuário real
+    if { [ -z "$desktop_raw" ] || [ -z "$display_raw" ]; } && [ -n "${REAL_USER:-}" ]; then
         local user_pid
         user_pid=$(pgrep -u "$REAL_USER" -n -f 'gnome-session|gnome-shell|plasmashell|xfce4-session|mate-session|cinnamon-session|lxsession|cosmic-session' 2>/dev/null || true)
         if [ -n "$user_pid" ] && [ -r "/proc/$user_pid/environ" ]; then
-            desktop_raw=$(tr '\0' '\n' < "/proc/$user_pid/environ" 2>/dev/null | grep -E '^XDG_CURRENT_DESKTOP=' | head -n1 | cut -d= -f2- || true)
             if [ -z "$desktop_raw" ]; then
-                desktop_raw=$(tr '\0' '\n' < "/proc/$user_pid/environ" 2>/dev/null | grep -E '^(DESKTOP_SESSION|XDG_SESSION_DESKTOP)=' | head -n1 | cut -d= -f2- || true)
+                desktop_raw=$(tr '\0' '\n' < "/proc/$user_pid/environ" 2>/dev/null \
+                    | grep -E '^(XDG_CURRENT_DESKTOP|DESKTOP_SESSION|XDG_SESSION_DESKTOP)=' \
+                    | head -n1 | cut -d= -f2- || true)
+            fi
+            if [ -z "$display_raw" ]; then
+                display_raw=$(tr '\0' '\n' < "/proc/$user_pid/environ" 2>/dev/null \
+                    | grep -E '^(DISPLAY|WAYLAND_DISPLAY)=' \
+                    | head -n1 | cut -d= -f2- || true)
             fi
         fi
     fi
 
-    if [ -n "$desktop_raw" ]; then
-        if echo "$desktop_raw" | grep -qiE 'kde|plasma'; then
-            DESKTOP_TYPE='KDE'
-            DESKTOP_NAME="KDE Plasma ($desktop_raw)"
-            return
-        elif echo "$desktop_raw" | grep -qiE 'gnome|xfce|mate|cinnamon|lxde|cosmic|budgie|pantheon|unity'; then
-            DESKTOP_TYPE='GTK'
-            DESKTOP_NAME="$desktop_raw"
-            return
-        else
-            DESKTOP_TYPE='NONE'
-            DESKTOP_NAME="$desktop_raw"
-            return
-        fi
+    # 1. KDE/Plasma: único ambiente não-GTK com tratamento especial
+    if echo "$desktop_raw" | grep -qiE 'kde|plasma'; then
+        DESKTOP_TYPE='KDE'
+        DESKTOP_NAME="$desktop_raw"
+        return
     fi
-
-    # Se ainda indefinido por variáveis, inspeciona processos em execução no sistema
-    if pgrep -x gnome-session >/dev/null 2>&1 || pgrep -x gnome-shell >/dev/null 2>&1; then
-        DESKTOP_TYPE='GTK'
-        DESKTOP_NAME='GNOME'
-    elif pgrep -x plasmashell >/dev/null 2>&1 || pgrep -x kded5 >/dev/null 2>&1 || pgrep -x kded6 >/dev/null 2>&1; then
+    if pgrep -x plasmashell >/dev/null 2>&1 || pgrep -x kded5 >/dev/null 2>&1 || pgrep -x kded6 >/dev/null 2>&1; then
         DESKTOP_TYPE='KDE'
         DESKTOP_NAME='KDE Plasma'
-    elif pgrep -x xfce4-session >/dev/null 2>&1; then
-        DESKTOP_TYPE='GTK'
-        DESKTOP_NAME='Xfce'
-    elif pgrep -x mate-session >/dev/null 2>&1; then
-        DESKTOP_TYPE='GTK'
-        DESKTOP_NAME='MATE'
-    elif pgrep -x cinnamon-session >/dev/null 2>&1 || pgrep -x cinnamon >/dev/null 2>&1; then
-        DESKTOP_TYPE='GTK'
-        DESKTOP_NAME='Cinnamon'
-    elif pgrep -x lxsession >/dev/null 2>&1; then
-        DESKTOP_TYPE='GTK'
-        DESKTOP_NAME='LXDE'
-    elif pgrep -x cosmic-session >/dev/null 2>&1; then
-        DESKTOP_TYPE='GTK'
-        DESKTOP_NAME='COSMIC'
-    # Como última opção em caso de execução pré-sessão ou chroot, verifica comandos disponíveis
-    elif command -v gnome-session &>/dev/null; then
-        DESKTOP_TYPE='GTK'
-        DESKTOP_NAME='GNOME (detectado via gnome-session)'
-    elif command -v startplasma-wayland &>/dev/null || command -v startplasma-x11 &>/dev/null; then
-        DESKTOP_TYPE='KDE'
-        DESKTOP_NAME='KDE Plasma (detectado via startplasma)'
-    elif command -v xfce4-session &>/dev/null; then
-        DESKTOP_TYPE='GTK'
-        DESKTOP_NAME='Xfce (detectado via xfce4-session)'
-    elif command -v mate-session &>/dev/null; then
-        DESKTOP_TYPE='GTK'
-        DESKTOP_NAME='MATE (detectado via mate-session)'
-    elif command -v cinnamon-session &>/dev/null; then
-        DESKTOP_TYPE='GTK'
-        DESKTOP_NAME='Cinnamon (detectado via cinnamon-session)'
-    elif command -v lxsession &>/dev/null; then
-        DESKTOP_TYPE='GTK'
-        DESKTOP_NAME='LXDE (detectado via lxsession)'
-    elif command -v cosmic-session &>/dev/null; then
-        DESKTOP_TYPE='GTK'
-        DESKTOP_NAME='COSMIC (detectado via cosmic-session)'
+        return
     fi
+
+    # 2. Sessão gráfica não-KDE → GTK
+    #    Qualquer ambiente de área de trabalho com sessão ativa usa GTK
+    #    (GNOME, Xfce, MATE, Cinnamon, LXDE, COSMIC, Budgie, Pantheon, Unity…).
+    #    Detectado por (em ordem de preferência):
+    #    a) XDG_CURRENT_DESKTOP com valor reconhecível (não vazio e não "none")
+    #    b) $DISPLAY (X11) ou $WAYLAND_DISPLAY presentes
+    #    c) Processos de gerenciador de sessão gráfica em execução
+    if [ -n "$desktop_raw" ] && ! echo "$desktop_raw" | grep -qiE '^none$'; then
+        DESKTOP_TYPE='GTK'
+        DESKTOP_NAME="$desktop_raw"
+        return
+    fi
+    if [ -n "$display_raw" ]; then
+        DESKTOP_TYPE='GTK'
+        DESKTOP_NAME='(sessão gráfica sem DE identificado)'
+        return
+    fi
+    if pgrep -x gnome-session >/dev/null 2>&1 || pgrep -x gnome-shell >/dev/null 2>&1 || \
+       pgrep -x xfce4-session >/dev/null 2>&1 || pgrep -x mate-session >/dev/null 2>&1 || \
+       pgrep -x cinnamon-session >/dev/null 2>&1 || pgrep -x cinnamon >/dev/null 2>&1 || \
+       pgrep -x lxsession >/dev/null 2>&1 || pgrep -x cosmic-session >/dev/null 2>&1; then
+        DESKTOP_TYPE='GTK'
+        DESKTOP_NAME='(detectado via processo de sessão gráfica)'
+        return
+    fi
+
+    # 3. Sem sessão gráfica: headless / servidor / CLI
+    DESKTOP_TYPE='NONE'
+    DESKTOP_NAME=''
 }
 
 #
