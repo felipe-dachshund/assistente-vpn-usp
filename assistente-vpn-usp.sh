@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# assistente-vpn-usp.sh, v. 2.0
+# assistente-vpn-usp.sh, v. 3.0
 #
 # Copyright (C) 2025-2026 Felipe Oliveira da Silva Netto
 #
@@ -29,7 +29,7 @@ set -e
 #
 # ==============================================================================
 
-THIS_VERSION=2.0
+THIS_VERSION=3.0
 
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
