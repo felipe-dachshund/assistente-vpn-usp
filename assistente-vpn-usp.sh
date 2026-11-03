@@ -41,6 +41,9 @@ VPN_GATEWAY=orion.uspnet.usp.br
 VPN_PORT=31443
 ASK=
 DRY_RUN=
+NUSP=
+DESKTOP_TYPE=
+DESKTOP_NAME=
 
 #
 # Função: exibir_ajuda
@@ -83,10 +86,20 @@ exibir_ajuda() {
 # em uma variável global.
 #
 solicitar_nusp() {
+    if [ -n "$DRY_RUN" ] && [ -z "$NUSP" ]; then
+        NUSP="12345678"
+        echo "Modo --dry-run: utilizando NUSP simulado ($NUSP)." >&2
+        return
+    fi
+
     while [ -z "$NUSP" ]; do
         read -p 'Por favor, digite seu Número USP (NUSP): ' NUSP
+        NUSP=$(echo "$NUSP" | tr -d ' .-/')
         if [ -z "$NUSP" ]; then
             echo -e "${RED}O Número USP não pode ser vazio. Por favor, tente novamente.$NC" >&2
+        elif ! [[ "$NUSP" =~ ^[0-9]+$ ]]; then
+            echo -e "${RED}O Número USP deve conter apenas números. Por favor, tente novamente.$NC" >&2
+            NUSP=
         fi
     done
 }
@@ -110,10 +123,7 @@ remover_dados_usuario() {
     else
         echo "Limpando diretório de configuração em '$USER_HOME'..." >&2
         if [ -z "$DRY_RUN" ]; then
-            # Usando caminho absoluto para 'runuser' para garantir que ele
-            # seja encontrado mesmo em sessões 'su' que não incluem /usr/sbin
-            # no $PATH.
-            /usr/sbin/runuser -u "$REAL_USER" -- sh -c "rm -rf '$USER_HOME/.config/FortiClient'"
+            rm -rf "$USER_HOME/.config/FortiClient"
         fi
     fi
 
@@ -205,6 +215,95 @@ remover_forticlient() {
 }
 
 #
+# Função: detectar_ambiente_desktop
+# Descrição: Identifica o ambiente gráfico atual e define as variáveis
+# globais DESKTOP_TYPE ('GTK', 'KDE' ou 'NONE') e DESKTOP_NAME.
+# Ambientes que usam a interface GTK: GNOME, Xfce, MATE, Cinnamon,
+# LXDE, COSMIC, Budgie, Pantheon, Unity, etc.
+# O KDE Plasma utiliza sua própria interface nativa via plasma-nm.
+#
+detectar_ambiente_desktop() {
+    DESKTOP_TYPE='NONE'
+    DESKTOP_NAME=''
+
+    local desktop_raw="${XDG_CURRENT_DESKTOP:-${DESKTOP_SESSION:-${XDG_SESSION_DESKTOP:-}}}"
+
+    # Se estiver sob sudo e a variável não foi preservada, busca no processo do usuário real
+    if [ -z "$desktop_raw" ] && [ -n "${REAL_USER:-}" ]; then
+        local user_pid
+        user_pid=$(pgrep -u "$REAL_USER" -n -f 'gnome-session|gnome-shell|plasmashell|xfce4-session|mate-session|cinnamon-session|lxsession|cosmic-session' 2>/dev/null || true)
+        if [ -n "$user_pid" ] && [ -r "/proc/$user_pid/environ" ]; then
+            desktop_raw=$(tr '\0' '\n' < "/proc/$user_pid/environ" 2>/dev/null | grep -E '^XDG_CURRENT_DESKTOP=' | head -n1 | cut -d= -f2- || true)
+            if [ -z "$desktop_raw" ]; then
+                desktop_raw=$(tr '\0' '\n' < "/proc/$user_pid/environ" 2>/dev/null | grep -E '^(DESKTOP_SESSION|XDG_SESSION_DESKTOP)=' | head -n1 | cut -d= -f2- || true)
+            fi
+        fi
+    fi
+
+    if [ -n "$desktop_raw" ]; then
+        if echo "$desktop_raw" | grep -qiE 'kde|plasma'; then
+            DESKTOP_TYPE='KDE'
+            DESKTOP_NAME="KDE Plasma ($desktop_raw)"
+            return
+        elif echo "$desktop_raw" | grep -qiE 'gnome|xfce|mate|cinnamon|lxde|cosmic|budgie|pantheon|unity'; then
+            DESKTOP_TYPE='GTK'
+            DESKTOP_NAME="$desktop_raw"
+            return
+        else
+            DESKTOP_TYPE='NONE'
+            DESKTOP_NAME="$desktop_raw"
+            return
+        fi
+    fi
+
+    # Se ainda indefinido por variáveis, inspeciona processos em execução no sistema
+    if pgrep -x gnome-session >/dev/null 2>&1 || pgrep -x gnome-shell >/dev/null 2>&1; then
+        DESKTOP_TYPE='GTK'
+        DESKTOP_NAME='GNOME'
+    elif pgrep -x plasmashell >/dev/null 2>&1 || pgrep -x kded5 >/dev/null 2>&1 || pgrep -x kded6 >/dev/null 2>&1; then
+        DESKTOP_TYPE='KDE'
+        DESKTOP_NAME='KDE Plasma'
+    elif pgrep -x xfce4-session >/dev/null 2>&1; then
+        DESKTOP_TYPE='GTK'
+        DESKTOP_NAME='Xfce'
+    elif pgrep -x mate-session >/dev/null 2>&1; then
+        DESKTOP_TYPE='GTK'
+        DESKTOP_NAME='MATE'
+    elif pgrep -x cinnamon-session >/dev/null 2>&1 || pgrep -x cinnamon >/dev/null 2>&1; then
+        DESKTOP_TYPE='GTK'
+        DESKTOP_NAME='Cinnamon'
+    elif pgrep -x lxsession >/dev/null 2>&1; then
+        DESKTOP_TYPE='GTK'
+        DESKTOP_NAME='LXDE'
+    elif pgrep -x cosmic-session >/dev/null 2>&1; then
+        DESKTOP_TYPE='GTK'
+        DESKTOP_NAME='COSMIC'
+    # Como última opção em caso de execução pré-sessão ou chroot, verifica comandos disponíveis
+    elif command -v gnome-session &>/dev/null; then
+        DESKTOP_TYPE='GTK'
+        DESKTOP_NAME='GNOME (detectado via gnome-session)'
+    elif command -v startplasma-wayland &>/dev/null || command -v startplasma-x11 &>/dev/null; then
+        DESKTOP_TYPE='KDE'
+        DESKTOP_NAME='KDE Plasma (detectado via startplasma)'
+    elif command -v xfce4-session &>/dev/null; then
+        DESKTOP_TYPE='GTK'
+        DESKTOP_NAME='Xfce (detectado via xfce4-session)'
+    elif command -v mate-session &>/dev/null; then
+        DESKTOP_TYPE='GTK'
+        DESKTOP_NAME='MATE (detectado via mate-session)'
+    elif command -v cinnamon-session &>/dev/null; then
+        DESKTOP_TYPE='GTK'
+        DESKTOP_NAME='Cinnamon (detectado via cinnamon-session)'
+    elif command -v lxsession &>/dev/null; then
+        DESKTOP_TYPE='GTK'
+        DESKTOP_NAME='LXDE (detectado via lxsession)'
+    elif command -v cosmic-session &>/dev/null; then
+        DESKTOP_TYPE='GTK'
+        DESKTOP_NAME='COSMIC (detectado via cosmic-session)'
+    fi
+}
+
+#
 # Função: configurar_vpn
 # Descrição: Instala e configura o OpenConnect, o OpenFortiVPN ou o
 # OpenFortiGUI, conforme os parâmetros fornecidos.
@@ -226,14 +325,10 @@ configurar_vpn() {
         solicitar_nusp
     fi
 
+    detectar_ambiente_desktop
+
     if command -v apt-get &> /dev/null; then
         local PACKAGES="network-manager-$PLUGIN_NAME"
-        local GNOME=
-        if echo "$XDG_CURRENT_DESKTOP" | grep -qi gnome; then
-            GNOME='$XDG_CURRENT_DESKTOP'
-        elif command -v gnome-session &> /dev/null; then
-            GNOME="comando 'gnome-session'"
-        fi
 
         if [[ "$VPN_CLIENT" == 'OpenFortiGUI' ]]; then
             echo 'Adicionando chaves e repositório do OpenFortiGUI.' >&2
@@ -243,11 +338,13 @@ configurar_vpn() {
                 echo 'deb [arch=amd64 signed-by=/usr/share/keyrings/iteas-keyring.gpg] https://apt.iteas.at/iteas bookworm main' > /etc/apt/sources.list.d/iteas.list
             fi
             PACKAGES=openfortigui
-        elif [ -z "$GNOME" ]; then
-            echo 'Ambiente de trabalho não-GNOME detectado. Instalando apenas o pacote base.' >&2
-        else
-            echo "Ambiente de trabalho GNOME detectado (via $GNOME). Adicionando pacote de integração." >&2
+        elif [ "$DESKTOP_TYPE" == 'GTK' ]; then
+            echo "Ambiente de trabalho compatível com interface GTK detectado ($DESKTOP_NAME). Adicionando pacote de integração." >&2
             PACKAGES="$PACKAGES network-manager-$PLUGIN_NAME-gnome"
+        elif [ "$DESKTOP_TYPE" == 'KDE' ]; then
+            echo "Ambiente de trabalho KDE detectado ($DESKTOP_NAME). O KDE gerencia a VPN nativamente via Plasma; instalando apenas o pacote base." >&2
+        else
+            echo 'Ambiente gráfico não detectado. Instalando apenas o pacote base.' >&2
         fi
         echo "Pacote(s) a ser(em) instalado(s): $PACKAGES" >&2
         if [ -n "$DRY_RUN" ]; then
@@ -258,8 +355,28 @@ configurar_vpn() {
         if [ -n "$DRY_RUN" ] && [ "$VPN_CLIENT" == 'OpenFortiGUI' ]; then
             echo 'Instalando openfortigui e dependências (se --dry-run não fosse declarado)' >&2
         else
-            apt-get $DRY_RUN $ASK install $PACKAGES
+            apt-get $DRY_RUN $ASK install $PACKAGES || [ -n "$DRY_RUN" ]
         fi
+    elif command -v dnf &> /dev/null; then
+        local PACKAGES="NetworkManager-$PLUGIN_NAME"
+        if [ "$DESKTOP_TYPE" == 'GTK' ]; then
+            echo "Ambiente de trabalho compatível com interface GTK detectado ($DESKTOP_NAME). Adicionando pacote de integração." >&2
+            PACKAGES="$PACKAGES NetworkManager-$PLUGIN_NAME-gnome"
+        elif [ "$DESKTOP_TYPE" == 'KDE' ]; then
+            echo "Ambiente de trabalho KDE detectado ($DESKTOP_NAME). O KDE gerencia a VPN nativamente via Plasma; instalando apenas o pacote base." >&2
+        else
+            echo 'Ambiente gráfico não detectado. Instalando apenas o pacote base.' >&2
+        fi
+        echo "Pacote(s) a ser(em) instalado(s): $PACKAGES" >&2
+        if [ -z "$DRY_RUN" ]; then
+            dnf $ASK install $PACKAGES
+        elif [ "$EUID" -eq 0 ]; then
+            dnf --setopt=tsflags=test $ASK install $PACKAGES
+        else
+            dnf --assumeno install $PACKAGES || true
+        fi
+    else
+        echo -e "${YELLOW}Aviso: Gerenciador de pacotes apt-get ou dnf não encontrado. O arquivo de configuração será gerado, mas os pacotes necessários devem ser instalados manualmente.$NC" >&2
     fi
 
     local PERMISSIONS=
@@ -279,12 +396,16 @@ configurar_vpn() {
     local CONN_UUID=
     if [[ "$VPN_CLIENT" != 'OpenFortiGUI' ]]; then
         CONN_PATH="/etc/NetworkManager/system-connections/$VPN_NAME.nmconnection"
-        CONN_UUID=$(< /proc/sys/kernel/random/uuid)
+        CONN_UUID=$(cat /proc/sys/kernel/random/uuid 2>/dev/null || uuidgen 2>/dev/null || echo "$RANDOM$RANDOM-$RANDOM-$RANDOM")
     elif [ -n "$REAL_USER" ]; then
+        local USER_HOME
+        USER_HOME=$(getent passwd "$REAL_USER" | cut -d: -f6)
+        [ -n "$USER_HOME" ] || USER_HOME="/home/$REAL_USER"
         if [ -z "$DRY_RUN" ]; then
-            sudo -u "$REAL_USER" mkdir -p "/home/$REAL_USER/.openfortigui/vpnprofiles"
+            mkdir -p "$USER_HOME/.openfortigui/vpnprofiles"
+            chown -R "$REAL_USER:$REAL_USER" "$USER_HOME/.openfortigui"
         fi
-        CONN_PATH="/home/$REAL_USER/.openfortigui/vpnprofiles/$VPN_NAME.conf"
+        CONN_PATH="$USER_HOME/.openfortigui/vpnprofiles/$VPN_NAME.conf"
     else
         [ -n "$DRY_RUN" ] || mkdir -p /etc/openfortigui/vpnprofiles
         CONN_PATH="/etc/openfortigui/vpnprofiles/$VPN_NAME.conf"
@@ -452,7 +573,10 @@ main() {
         exit 1
     fi
 
-    args=$(getopt -o 'yhv' -l 'nusp:,yes,dry-run,openfortivpn,fortisslvpn,help,version' -- "$@")
+    if ! args=$(getopt -o 'yhv' -l 'nusp:,yes,dry-run,openfortivpn,fortisslvpn,help,version' -n "$0" -- "$@"); then
+        exibir_ajuda
+        exit 1
+    fi
     eval "set -- $args"
 
     local VPN_CLIENT=OpenConnect
@@ -460,7 +584,12 @@ main() {
         case $1 in
         --nusp)
             shift
-            NUSP=$1;;
+            NUSP=$(echo "$1" | tr -d ' .-/')
+            if ! [[ "$NUSP" =~ ^[0-9]+$ ]]; then
+                echo -e "${RED}Número USP inválido: $1. Deve conter apenas dígitos.$NC" >&2
+                exit 1
+            fi
+            ;;
         -y|--yes) ASK='-y';;
         --dry-run) DRY_RUN='--dry-run';;
         --openfortivpn|--fortisslvpn) VPN_CLIENT=OpenFortiVPN;;
@@ -483,8 +612,11 @@ main() {
 
     if [ $# -eq 0 ] || [ -z "$1" ]; then
         echo -e "${RED}AÇÃO ausente.$NC" >&2
+        exibir_ajuda
+        exit 1
     fi
-    if [ $# -ne 1 ]; then 
+    if [ $# -gt 1 ]; then
+        echo -e "${RED}Apenas uma ação pode ser especificada.$NC" >&2
         exibir_ajuda
         exit 1
     fi
@@ -514,15 +646,16 @@ main() {
     fi
 
     if [ "$ACTION" = 'install' ]; then
-        if [ ! -f /etc/os-release ]; then
-            echo -e "${RED}Não foi possível encontrar o arquivo /etc/os-release para determinar a sua distribuição. Saindo.$NC" >&2
+        local os_file="${OS_RELEASE_FILE:-/etc/os-release}"
+        if [ ! -f "$os_file" ]; then
+            echo -e "${RED}Não foi possível encontrar o arquivo $os_file para determinar a sua distribuição. Saindo.$NC" >&2
             exit 3
         fi
-        . /etc/os-release
+        . "$os_file"
 
         echo -e "\nDetectando distribuição: ${NAME:-'desconhecida'} ${VERSION:-''}" >&2
 
-        if [[ "${ID:-}" == 'debian' || "${ID_LIKE:-}" == 'debian' ]] && [[ "${VERSION_ID%%.*}" -lt 13 ]] && [[ "$VPN_CLIENT" != 'OpenFortiVPN' ]]; then
+        if [[ "${ID:-}" == 'debian' ]] && [[ -n "${VERSION_ID:-}" ]] && [[ "${VERSION_ID%%.*}" =~ ^[0-9]+$ ]] && [[ "${VERSION_ID%%.*}" -le 12 ]] && [[ "$VPN_CLIENT" != 'OpenFortiVPN' ]]; then
             VPN_CLIENT=OpenFortiGUI
         fi
         configurar_vpn "$REAL_USER" "$VPN_CLIENT"
