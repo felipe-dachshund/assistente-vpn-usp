@@ -27,11 +27,12 @@ A solução ideal varia conforme a versão da sua distribuição Linux, devido �
     ```
     O `NetworkManager-openconnect` já vem instalado no Fedora.
 
-2.  **(Opcional) Para integração com o ambiente GNOME**, instale também:
+2.  **(Opcional) Para integração com interface gráfica GTK (GNOME, Xfce, MATE, Cinnamon, LXDE, COSMIC etc.)**, instale também:
     ```bash
     sudo apt install network-manager-openconnect-gnome
     ```
-    O `NetworkManager-openconnect-gnome` já vem instalado no Fedora.
+    Este pacote provê a interface gráfica em GTK4/GTK3 para editar a conexão e o diálogo de autenticação. No Fedora, instale `NetworkManager-openconnect-gnome` (caso já não esteja pré-instalado).
+    *Nota para o KDE Plasma:* o KDE gerencia as conexões OpenConnect nativamente por meio do módulo `plasma-nm`, portanto não necessita do pacote de interface GNOME.
 
 3.  **Recarregue o NetworkManager** (pode ser necessário no Debian):
     ```bash

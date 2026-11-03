@@ -52,14 +52,31 @@ Para conhecer outras opções e possibilidades de uso, experimente `./assistente
 
 ## Compatibilidade
 
-O script foi testado e é compatível com as seguintes distribuições Linux:
+O script foi testado e é compatível com as seguintes distribuições Linux e ambientes gráficos:
 
-- **Debian** 12 e 13 (GNOME e KDE)
+- **Debian** 12 e 13
 - **Ubuntu** 24.04 ou superior (até 26.04 LTS)
 - **Kubuntu** 25.10 ou superior (até 26.04 LTS)
-- **Fedora** 42 e 44 (Workstation e KDE)
+- **Fedora** 42 e 44
 
-Ele deve funcionar em derivados com GNOME e KDE, mas não foi testado formalmente.
+**Ambientes de Desktop:**
+- Ambientes com interface GTK (GNOME, Xfce, MATE, Cinnamon, LXDE, COSMIC etc.): instala automaticamente o plugin de interface gráfica (`network-manager-openconnect-gnome`).
+- KDE Plasma: integração nativa via `plasma-nm` (sem necessidade do pacote GTK).
+- Servidores / CLI (sem ambiente gráfico): instala apenas o pacote base do NetworkManager.
+
+## Testes Automatizados
+
+O projeto conta com uma suíte abrangente de testes:
+- **Testes unitários e de integração:** executados com Python 3 padrão (sem necessidade de instalar pacotes extras).
+- **Testes em contêineres:** validação multi-distro em Debian, Ubuntu e Fedora (via Podman ou Docker).
+- **Teste interativo de conexão real:** verifica a conectividade e autenticação com o gateway da USP (`orion.uspnet.usp.br`) com solicitação segura de credenciais.
+
+Para executar os testes locais:
+```bash
+./tests/run_tests.sh
+```
+
+Consulte [tests/README.md](tests/README.md) para mais detalhes.
 
 ## Instalação Manual e Outras Plataformas
 
