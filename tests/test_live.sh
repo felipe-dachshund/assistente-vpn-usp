@@ -21,7 +21,7 @@ VPN_PORT="31443"
 
 # Garante que as variáveis de credenciais sejam limpas ao sair ou interromper
 cleanup() {
-    unset SENHA_USP OTP_TOKEN NUSP
+    unset SENHA_USP OTP_TOKEN NUSP AUTH_INPUT
 }
 trap cleanup EXIT INT TERM
 
